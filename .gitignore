@@ -1,0 +1,8 @@
+work/
+archive/
+
+*.vcd
+*.mti
+*.mpf
+*.txt
+*.wlf
