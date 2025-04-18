@@ -1,4 +1,8 @@
-module source (
+module source 
+#(
+parameter LEN =4
+)
+(
     input clk,
     input rst_n,
     output reg valid,
@@ -13,7 +17,7 @@ module source (
     reg last_flag;
     reg [7:0] valid_counter;
     assign valid_out = valid;
-    assign last_out = valid_out && ((counter + 1) % 4 == 0) && ready;
+    assign last_out = valid_out && ((counter + 1) % LEN == 0) && ready;
 
     always @(*)
         data = counter;

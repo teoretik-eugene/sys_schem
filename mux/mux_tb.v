@@ -71,7 +71,9 @@ module mux_tb;
         $dumpvars(0,mux_tb);
     end
 
-    source src0 (
+    source
+    #(.LEN(4))
+     src0 (
         .clk(clk),
         .rst_n(rst_n),
         // .valid(valid[0]),
@@ -83,7 +85,9 @@ module mux_tb;
         .valid_out(valid_out_0)
     );
 
-    source src1 (
+    source 
+    #(.LEN(6))
+    src1 (
         .clk(clk),
         .rst_n(rst_n),
         // .valid(valid[0]),

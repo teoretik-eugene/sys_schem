@@ -6,7 +6,6 @@ module sink (
     input last_in,
     input [7:0] data_in,
     output reg ready_out,
-    output ready,
     
     output reg valid_out,
     output reg last_out,
@@ -14,7 +13,7 @@ module sink (
     input ready_in
 );
 
-    reg[1:0] counter;
+    reg [1:0] counter;
 
     always @(posedge clk) begin
 
@@ -43,8 +42,17 @@ module sink (
     always @(posedge clk) begin
         if (!rst_n) begin
             ready_out <= 0;
+            counter <= 0;
         end
         else  begin
+
+            if (counter == 0) begin
+                ready_out <= 1;
+            end else if (counter == 3) begin
+                ready_out <= 0;
+                counter <= 0;
+            end
+            counter <= counter + 1;
             // counter <= counter + 1;
             // if (counter == 2) begin
             //     ready_out <= ~ready_out;
@@ -52,7 +60,7 @@ module sink (
             // end
             
             // код ниже, чтобы генерировать каждый такт 
-            ready_out <= ~ready_out;
+            //ready_out <= ~ready_out;
             
         end
     end
