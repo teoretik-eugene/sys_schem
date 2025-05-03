@@ -35,7 +35,7 @@ module source_rand
     end
 
     always @(posedge clk) begin
-        if (!ready && (delay != cnt)) begin
+        if (delay != cnt) begin
             cnt <= cnt + 1;
             valid <= 0;
         end
