@@ -11,20 +11,26 @@ module source_rand
     output reg [LEN-1:0] data
 );
 
-    reg [2:0] delay;
-    reg [2:0] cnt;
+    reg signed [2:0] delay;
+    reg signed [2:0] cnt;
 
     assign last = valid;
     
     always @(posedge clk) begin
-        if (!(ready && valid) && delay == cnt) begin
-            data <= $random % 256;
-            delay <= $random % 8;
-            valid <= 1;
+
+        if (rst) begin
             cnt <= 0;
-        end
-        else if (ready) begin
-            valid <= 0;
+            delay <= 0;
+        end else begin
+            if (!(ready && valid) && delay == cnt) begin
+                data <= $random % 256;
+                delay <= $random % 8;
+                valid <= 1;
+                cnt <= 0;
+            end
+            else if (ready) begin
+                valid <= 0;
+            end
         end
     end
 

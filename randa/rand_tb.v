@@ -47,6 +47,17 @@ module rand_tb;
         .valid(valid_out_0)
     );
 
+    source_rand
+    #(.LEN(8))
+    src1 (
+        .clk(clk),
+        .rst(rst),
+        .last(last_1),
+        .data(data_1),
+        .ready(ready_sum),
+        .valid(valid_out_1)
+    );
+
     sumr
     #(.LEN(8))
     sum (

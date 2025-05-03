@@ -16,9 +16,9 @@ module sinkr
     output reg [LEN-1:0] data
 );
 
-    reg [2:0] delay;
-    reg [2:0] cnt;
-    reg [2:0] delay_cnt;
+    reg signed [2:0] delay;
+    reg signed [2:0] cnt;
+    reg signed [2:0] delay_cnt;
 
     //assign last = valid_out;
     assign last = valid_out;
@@ -28,18 +28,20 @@ module sinkr
             ready_out <= 0;
             cnt <= 0;
             delay_cnt <= 0;
+            delay <= 0;
         end
+        // генерация сигнала ready
         else  begin
-            // if (delay_cnt == delay) begin
-                
-            // end
-            if (cnt == 0 && delay_cnt == delay) begin
-                ready_out <= 1;
-            end else if (cnt == 2 && delay_cnt == delay) begin
-                ready_out <= 0;
-                cnt <= 0;
+            // если счетчик задержки досчитал - генерируем сигнал ready
+            if (delay_cnt == delay) begin
+                cnt <= cnt + 1;
+                if (cnt == 0) begin
+                    ready_out <= 1;
+                end else if (cnt == 2) begin
+                    ready_out <= 0;
+                    cnt <= 0;
+                end
             end
-            cnt <= cnt + 1;  
         end
     end
     /*
@@ -53,6 +55,8 @@ module sinkr
             delay <= $random % 8;
             valid_out <= 1;
             delay_cnt <= 0;
+            cnt <= 0;
+            ready_out <= 0;
         end
     end
 
