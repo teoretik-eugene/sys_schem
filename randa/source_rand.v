@@ -11,8 +11,8 @@ module source_rand
     output reg [LEN-1:0] data
 );
 
-    reg signed [2:0] delay;
-    reg signed [2:0] cnt;
+    reg [2:0] delay;
+    reg [2:0] cnt;
 
     assign last = valid;
     
@@ -23,8 +23,8 @@ module source_rand
             delay <= 0;
         end else begin
             if (!(ready && valid) && delay == cnt) begin
-                data <= $random % 256;
-                delay <= $random % 8;
+                data <= $random & 8'hFF;
+                delay <= $random & 4'b1111;
                 valid <= 1;
                 cnt <= 0;
             end
