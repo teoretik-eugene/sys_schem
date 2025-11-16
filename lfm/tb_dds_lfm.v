@@ -9,6 +9,7 @@ module tb_dds_lfm;
     localparam N_PHASE = 32;
     localparam LUT_BITS = 10;
     localparam OUT_WIDTH = 16;
+    localparam LUT_WIDTH = 10;
     localparam INIT_FTW = 32'h0000002A;   // поставить значение FTW0 (из matlab)
     localparam DELTA_FTW = 32'h00000000;  // поставить delta_FTW
 
@@ -17,8 +18,13 @@ module tb_dds_lfm;
         .LUT_BITS(LUT_BITS),
         .LUT_SIZE(1<<LUT_BITS),
         .OUT_WIDTH(OUT_WIDTH),
-        .INIT_FTW(INIT_FTW),
-        .DELTA_FTW(DELTA_FTW)
+        .LUT_WIDTH(LUT_WIDTH),
+        .F_CLK(1_000_000),
+        .F_START(10),
+        .F_STOP(100),
+        .CHIRP_SAMPLES(100_000)
+        // .INIT_FTW(INIT_FTW),
+        // .DELTA_FTW(DELTA_FTW)
     ) uut (
         .clk(clk),
         .rst_n(rst_n),
@@ -33,7 +39,7 @@ module tb_dds_lfm;
         #5;
         rst_n = 1;
         // Симулируем несколько тысяч тактов
-        #1000000;
+        #10000000;
         $finish;
     end
 endmodule
