@@ -1,45 +1,47 @@
-// dds_lfm.v  — минимальная DDS LFM на fixed-point
 module dds_lfm #(
     parameter N_PHASE = 32,
-    parameter integer FTW_EXT = 64,
-    parameter LUT_BITS = 10,           // log2(LUT_SIZE)
+    parameter integer FRAC_BITS = 12,
+    parameter integer FTW_EXT = N_PHASE + FRAC_BITS,
+    parameter LUT_BITS = 10,
     parameter LUT_SIZE = (1<<LUT_BITS),
-    parameter OUT_WIDTH = 16,          // бит выхода (signed)
-    parameter integer LUT_WIDTH = 10,
+    parameter OUT_WIDTH = 16,
+    parameter integer LUT_WIDTH = 10
 
-    parameter integer F_CLK     = 1_000_000,
-    parameter integer F_START   = 10,
-    parameter integer F_STOP    = 100,
-    parameter integer CHIRP_SAMPLES = 1_000_000
+    // parameter integer F_CLK = 1_000_000,
+    // parameter integer F_START = 10,
+    // parameter integer F_STOP = 100,
+    // parameter integer CHIRP_SAMPLES = 1_000_000
 )(
     input wire clk,
     input wire rst_n,
-    output reg [15:0] dout
+
+    input wire start,
+    input wire [31:0] f_start,
+    input wire [31:0] f_stop,
+    input wire [31:0] f_clk,
+    input wire [63:0] chirp_len,
+
+    output reg [15:0] dout,
+    output reg busy,
+    output reg [63:0] current_freq,
+    output reg done
 );
-    // FIXME проблема в том, что FTW должна вычисляться каждый раз при новой частоте, хотя мб и не так - разобраться
-    localparam reg [63:0] FTW0 = (F_START * (1<<N_PHASE)) / F_CLK;
-
-    localparam reg [63:0] DELTA_FTW = ((F_STOP - F_START) * (1<<N_PHASE)) / (F_CLK * CHIRP_SAMPLES);
-
-
-    // Фазовый аккумулятор и FTW-аккумулятор (всё целочисленное)
-    reg [N_PHASE-1:0] phase_acc = 0;
-    reg [N_PHASE-1:0] ftw_acc = FTW0;
-    reg [N_PHASE-1:0] FTW = FTW0;
-
     // ROM для синуса (LUT)
     // Мы предполагаем 16-bit signed данные в HEX
     reg [OUT_WIDTH-1:0] lut [0:LUT_SIZE-1];
 
+    reg [FTW_EXT-1:0] FTW0_EXT;
+    reg [FTW_EXT-1:0] DELTA_FTW_EXT;
+    reg [N_PHASE-1:0] phase_acc = 0;
+    reg [FTW_EXT-1:0] ftw_acc_ext;
+    reg [31:0] sample_cnt;
+    reg [1:0] state;
+    reg [1:0] next_state;
+
     initial begin
         $readmemh("sine_lut_unsigned16.hex", lut);
-        $display("F_START = %d (0x%08x)", F_START, F_START);
-        $display("1<<N_PHASE = %d (0x%08x)", 1<<(N_PHASE-1), 1<<N_PHASE);
-        $display("F_CLK = %d (0x%08x)", F_CLK, F_CLK);
-        $display("FTW0 = %d (0x%08x)", FTW0, FTW0);
-        $display("DELTA_FTW = %d (0x%08x)", DELTA_FTW, DELTA_FTW);
+        $display("1<<N_PHASE = %d (0x%08x)", 1<<(N_PHASE), 1<<N_PHASE);
         $display("DDS: LUT_SIZE=%0d, OUT_WIDTH=%0d, N_PHASE=%0d", LUT_SIZE, OUT_WIDTH, N_PHASE);
-        $display("DDS: FTW0=%0d, DELTA_FTW=%0d, N_PHASE=%0d", FTW0, DELTA_FTW, N_PHASE);
         $display("DDS: example lut[0] = %0d (0x%0h)", lut[0], lut[0]);
         $display("DDS: example lut[512] = %0d (0x%0h)", lut[512], lut[512]);
         $display("DDS: example lut[1023] = %0d (0x%0h)", lut[1023], lut[1023]);
@@ -52,16 +54,68 @@ module dds_lfm #(
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            phase_acc <= {N_PHASE{1'b0}};
-            ftw_acc <= FTW0;
-            dout <= {OUT_WIDTH{1'b0}};
+            dout <= 0;
+            busy <= 0;
+            done <= 0;
+            sample_cnt <= 0;
+            phase_acc <= 0;
+            ftw_acc_ext <= FTW0_EXT;
+            state <= 0;
         end else begin
+            done <= 1'b0;
 
-            // Обновляем FTW-аккумулятор (линейное изменение FTW)
-            ftw_acc <= ftw_acc + DELTA_FTW;
-            //ftw_acc   <= ftw_acc + DELTA_FTW; // FTW grows linearly
-            phase_acc <= phase_acc + ftw_acc;       // TODO: определить почему не изменяется или не накапливается фаза
-            dout <= lut[addr];
+            case (state)
+                2'd0: begin
+                    busy <= 1'b0;
+                    if (start) begin
+                        FTW0_EXT <= (f_start * (64'd1 << FTW_EXT)) / f_clk;
+                        //DELTA_FTW_EXT <= ((F_STOP - F_START) * (64'd1 << FTW_EXT)) / (F_CLK * CHIRP_SAMPLES);
+                        if (chirp_len != 0)
+                            DELTA_FTW_EXT <= ((64'd1 << FTW_EXT)*(f_stop - f_start))/(f_clk*chirp_len);
+                        else
+                            DELTA_FTW_EXT <= {FTW_EXT{1'b0}};
+                        $display("f_clk = %d (0x%08x)", f_clk, f_clk);
+                        ftw_acc_ext <= {FTW_EXT{1'b0}};
+                        phase_acc <= {N_PHASE{1'b0}};
+                        sample_cnt <= 32'd0;
+                        state <= 2'd1;
+                        busy <= 1'b1;
+                    end
+                end
+                2'd1: begin
+                    busy <= 1'b1;
+
+                    if (sample_cnt == 0) begin
+                        ftw_acc_ext <= FTW0_EXT;
+                        $display("FTW0 = %d (0x%08x)", FTW0_EXT, FTW0_EXT);
+                        $display("DELTA_FTW_EXT = %d (0x%08x)", DELTA_FTW_EXT, DELTA_FTW_EXT);
+                    end else
+                        ftw_acc_ext <= ftw_acc_ext + DELTA_FTW_EXT;
+                    phase_acc <= phase_acc + ftw_acc_ext[FTW_EXT-1 -: N_PHASE];
+
+                    current_freq <= (ftw_acc_ext[FTW_EXT-1 -: N_PHASE] * f_clk) >> N_PHASE;
+
+                    dout <= lut[addr];
+
+                    sample_cnt <= sample_cnt + 1;
+
+                    if (sample_cnt + 1 >= chirp_len) begin
+                        state <= 2'd2;
+                    end
+                end
+                2'd2: begin
+                    busy <= 1'b0;
+                    done <= 1'b1;
+                    dout <= {OUT_WIDTH{1'b0}};
+                    sample_cnt <= 32'd0;
+                    phase_acc <= {N_PHASE{1'b0}};
+                    ftw_acc_ext <= {FTW_EXT{1'b0}};
+                    state <= 2'd0;
+                end
+                default: begin
+                    state <= 2'd0;
+                end
+            endcase
         end
     end
 
