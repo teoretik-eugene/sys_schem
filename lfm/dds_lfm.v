@@ -2,10 +2,10 @@ module dds_lfm #(
     parameter N_PHASE = 32,
     parameter integer FRAC_BITS = 12,
     parameter integer FTW_EXT = N_PHASE + FRAC_BITS,
-    parameter LUT_BITS = 10,
+    parameter LUT_BITS = 16,
     parameter LUT_SIZE = (1<<LUT_BITS),
     parameter OUT_WIDTH = 16,
-    parameter integer LUT_WIDTH = 10
+    parameter integer LUT_WIDTH = 16
 
     // parameter integer F_CLK = 1_000_000,
     // parameter integer F_START = 10,
@@ -27,16 +27,18 @@ module dds_lfm #(
     output reg done
 );
     // ROM для синуса (LUT)
-    // Мы предполагаем 16-bit signed данные в HEX
+    // предполагаем 16-bit signed данные в HEX
     reg [OUT_WIDTH-1:0] lut [0:LUT_SIZE-1];
 
-    reg [FTW_EXT-1:0] FTW0_EXT;
-    reg [FTW_EXT-1:0] DELTA_FTW_EXT;
+    reg [FTW_EXT:0] FTW0_EXT;
+    reg [FTW_EXT:0] DELTA_FTW_EXT;
     reg [N_PHASE-1:0] phase_acc = 0;
     reg [FTW_EXT-1:0] ftw_acc_ext;
-    reg [31:0] sample_cnt;
+    reg [63:0] sample_cnt;
     reg [1:0] state;
     reg [1:0] next_state;
+    reg[31:0] f_len;
+    reg [63:0] temp_freq_calc;
 
     initial begin
         $readmemh("sine_lut_unsigned16.hex", lut);
@@ -68,6 +70,7 @@ module dds_lfm #(
                 2'd0: begin
                     busy <= 1'b0;
                     if (start) begin
+                        //f_len = 
                         FTW0_EXT <= (f_start * (64'd1 << FTW_EXT)) / f_clk;
                         //DELTA_FTW_EXT <= ((F_STOP - F_START) * (64'd1 << FTW_EXT)) / (F_CLK * CHIRP_SAMPLES);
                         if (chirp_len != 0)
@@ -77,7 +80,7 @@ module dds_lfm #(
                         $display("f_clk = %d (0x%08x)", f_clk, f_clk);
                         ftw_acc_ext <= {FTW_EXT{1'b0}};
                         phase_acc <= {N_PHASE{1'b0}};
-                        sample_cnt <= 32'd0;
+                        sample_cnt <= 64'd0;
                         state <= 2'd1;
                         busy <= 1'b1;
                     end
@@ -89,12 +92,14 @@ module dds_lfm #(
                         ftw_acc_ext <= FTW0_EXT;
                         $display("FTW0 = %d (0x%08x)", FTW0_EXT, FTW0_EXT);
                         $display("DELTA_FTW_EXT = %d (0x%08x)", DELTA_FTW_EXT, DELTA_FTW_EXT);
+                        $display("ftw_acc_ext[FTW_EXT-1 -: N_PHASE] = %d (0x%08x)", ftw_acc_ext[FTW_EXT-1 -: N_PHASE], ftw_acc_ext[FTW_EXT-1 -: N_PHASE]);
                     end else
                         ftw_acc_ext <= ftw_acc_ext + DELTA_FTW_EXT;
                     phase_acc <= phase_acc + ftw_acc_ext[FTW_EXT-1 -: N_PHASE];
-
-                    current_freq <= (ftw_acc_ext[FTW_EXT-1 -: N_PHASE] * f_clk) >> N_PHASE;
-
+                    temp_freq_calc = (ftw_acc_ext * f_clk) >> FTW_EXT;
+                    current_freq <= temp_freq_calc[31:0];
+                    //$display("ftw_acc_ext[FTW_EXT-1 -: N_PHASE] = %d (0x%08x)", ftw_acc_ext[FTW_EXT-1 -: N_PHASE], ftw_acc_ext[FTW_EXT-1 -: N_PHASE]);
+                    //current_freq <= (ftw_acc_ext[FTW_EXT-1 -: N_PHASE] * f_clk) >> N_PHASE;
                     dout <= lut[addr];
 
                     sample_cnt <= sample_cnt + 1;

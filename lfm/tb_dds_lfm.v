@@ -1,4 +1,4 @@
-`timescale 1ns/1ps
+`timescale 1ns/1ns
 module tb_dds_lfm;
     reg clk = 0;
     reg rst_n = 0;
@@ -9,13 +9,15 @@ module tb_dds_lfm;
     reg [31:0] f_end;
     reg [63:0] chirp_len;
     reg [31:0] f_clk;
-    reg busy;
+    wire busy;
     reg start;
     
     localparam N_PHASE = 32;
-    localparam LUT_BITS = 10;
+    localparam LUT_BITS = 16;
     localparam OUT_WIDTH = 16;
-    localparam LUT_WIDTH = 10;
+    localparam LUT_WIDTH = 16;
+
+    integer f;
 
     dds_lfm #(
         .N_PHASE(N_PHASE),
@@ -35,7 +37,7 @@ module tb_dds_lfm;
         .f_start(f_start),
         .f_stop(f_end),
         .chirp_len(chirp_len),
-        // .busy(busy),
+        .busy(busy),
         .start(start),
         .f_clk(f_clk),
         .done(done),
@@ -48,9 +50,12 @@ module tb_dds_lfm;
     initial begin
         $dumpfile("tb_dds_lfm.vcd");
         $dumpvars(0,tb_dds_lfm);
+
+        f = $fopen("dds_output.txt", "w");
+
         f_start = 10;
         f_end = 1000;
-        chirp_len = 1_000_000;
+        chirp_len = 100_000_000;
         start = 1;
         f_clk = 100_000_000;
         #5;
@@ -58,7 +63,16 @@ module tb_dds_lfm;
         rst_n = 1;
         #5
         start = 0;
-        #20000000;
+        #1000000000;
+        #50;
+        // закрываем файл
+        $fclose(f);
+        $display("Simulation finished.");
         $finish;
+    end
+
+    always @(posedge clk) begin
+        if (busy)
+            $fwrite(f, "%0d\n", dout);
     end
 endmodule
